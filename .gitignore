@@ -1,0 +1,25 @@
+# Local .terraform directories
+**/.terraform/*
+
+# State files
+*.tfstate
+*.tfstate.*
+
+# Crash log files
+crash.log
+crash.*.log
+
+# Plan output
+*.tfplan
+tfplan
+
+# Variable files that may contain secrets
+*.tfvars
+*.tfvars.json
+!*.example.tfvars
+# Auto-loaded image tag (written by the dvtl-815-app build pipeline; holds a
+# git SHA, no secret) — keep tracked despite the *.tfvars rule above.
+!image_tag.auto.tfvars
+
+# macOS
+.DS_Store

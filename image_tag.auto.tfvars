@@ -1,0 +1,1 @@
+app_image_tag = "417ff93abc9502e4da9dee0a4c3f6d0ab98ce805"
