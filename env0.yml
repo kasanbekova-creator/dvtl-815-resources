@@ -1,34 +1,28 @@
-# env0 custom flow (v2). Installs AWS CLI v2 on the runner BEFORE `tofu init`, because
-# providers.tf authenticates the kubernetes/helm providers to EKS via exec auth
-# (`aws eks get-token`), and the aws_eks_cluster data source + provider config resolve
-# during plan. The env0 runner image does not ship the aws CLI (unlike aws-poc's CodeBuild
-# image), so without this step every k8s/helm apply fails "exec: executable aws not found".
+# env0 custom flow (v2) — TEMPORARY MULTI-HOOK DIAGNOSTIC.
+#
+# Goal: find which lifecycle hook env0 actually runs for THIS OpenTofu template, and print the
+# runner's OS/libc + install tools so we can pick the right AWS CLI install method. A prior probe
+# under terraformInit.before produced NO log output even though the file is valid, at repo root,
+# pushed, and the project policy is Merge — so we fan a tiny probe across three early hooks. Whichever
+# "PROBE-HOOK-FIRED" line prints tells us the correct step key; if none print, the custom flow isn't
+# being applied to this template (env0-side config, not this file). All steps exit 0 (informational);
+# the run will still fail later at "aws not found" until we add the real install step.
+#
+# NOTE: every `run` is a single line (commands joined with ';') to avoid YAML block-scalar pitfalls.
 version: 2
 shell: bash
 
 deploy:
   steps:
+    setupVariables:
+      before:
+        - name: PROBE setupVariables.before
+          run: 'echo PROBE-HOOK-FIRED:setupVariables.before'
     terraformInit:
       before:
-        # TEMPORARY DIAGNOSTIC — prints the runner's OS/libc + available install tools so we can pick
-        # the right AWS CLI install method. The official v2 installer failed with
-        # "cannot execute: required file not found", which points to a musl/Alpine runner (the v2
-        # binary is glibc-only). This step is informational (exits 0) and will be replaced by the
-        # real install once we see the output. The run will still fail later at "aws not found".
-        - name: Probe runner environment
-          run: |
-            echo "===== /etc/os-release ====="
-            cat /etc/os-release 2>&1 || echo "(no /etc/os-release)"
-            echo "===== libc (ldd) ====="
-            ldd --version 2>&1 | head -3 || echo "(ldd not available)"
-            echo "===== whoami / HOME ====="
-            id 2>&1; echo "HOME=$HOME"
-            echo "===== available install tools ====="
-            for t in apk apt-get yum dnf pip pip3 python3 curl unzip aws aws-iam-authenticator; do
-              if command -v "$t" >/dev/null 2>&1; then
-                echo "FOUND  $t -> $(command -v "$t")"
-              else
-                echo "absent $t"
-              fi
-            done
-            echo "===== done (informational) ====="
+        - name: PROBE terraformInit.before plus env details
+          run: 'echo PROBE-HOOK-FIRED:terraformInit.before; echo "--- os-release ---"; cat /etc/os-release 2>&1 || true; echo "--- ldd ---"; ldd --version 2>&1 | head -3 || true; echo "--- id/HOME ---"; id; echo "HOME=$HOME"; echo "--- tools ---"; for t in apk apt-get yum dnf pip3 python3 curl unzip aws aws-iam-authenticator; do command -v "$t" >/dev/null 2>&1 && echo "FOUND $t" || echo "absent $t"; done; echo "--- done ---"'
+    terraformPlan:
+      before:
+        - name: PROBE terraformPlan.before
+          run: 'echo PROBE-HOOK-FIRED:terraformPlan.before'
