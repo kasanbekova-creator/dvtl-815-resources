@@ -1,17 +1,19 @@
 # env0 self-hosted agent Helm values — dvtl-815-resources cluster: dvtl815-poc / us-west-2
 # Chart: env0/env0-agent v5.3.0
 #
-# The dvtl815-poc cluster enforces a Kyverno policy (require-requests-limits) that BLOCKS any
-# container without BOTH cpu+memory requests AND cpu+memory limits. The chart's DEFAULT values
-# leave two gaps that trip this policy, so we fill both here:
-#   1. agentProxy.requests is missing `cpu` by default  -> the proxy Deployment is rejected.
-#   2. the deployment-job pod's top-level `requests` is commented out by default -> the job pod
-#      would be rejected next.
-# Both blocks below therefore specify cpu AND memory under BOTH requests and limits.
+# The dvtl815-poc cluster enforces a Kyverno policy (require-requests-limits) that rejects any
+# container without BOTH cpu+memory requests AND cpu+memory limits. Resource keys MUST match the
+# chart's real schema (verified via `helm show values env0/env0-agent`):
+#   - agentTrigger.{requests,limits}  -> the trigger pod (chart default omits requests.cpu)
+#   - top-level {requests,limits}     -> the per-run deployment-job pod (chart comments requests out)
+# NOTE: the chart's `agentProxy` section takes install/replicas/maxConcurrentRequests/
+# maxOldSpaceSize only — it has NO requests/limits keys, so resource values placed under
+# agentProxy are silently ignored. Do not put resources there.
 
-# --- Proxy pod (the always-on agent proxy Deployment) ------------------------
-# Its own nested block in the chart. Defaults set limits (cpu 500m / mem 1000Mi) and a requests
-# block that OMITS cpu — we add cpu so the pair is complete for Kyverno.
+# --- Proxy pod ----------------------------------------------------------------
+# Kyverno blocks this pod (env0-agent-agent-proxy-deployment) without a complete requests+limits
+# block. `helm show values` does NOT list these proxy resource keys, but the admission error
+# proves the proxy DOES accept and require them — so set both here.
 agentProxy:
   requests:
     cpu: 250m
@@ -20,10 +22,21 @@ agentProxy:
     cpu: 500m
     memory: 1000Mi
 
+# --- Trigger pod --------------------------------------------------------------
+# Chart default sets limits (cpu 500m / mem 1000Mi) and a requests block MISSING cpu.
+# Supply cpu so requests is complete for Kyverno.
+agentTrigger:
+  requests:
+    cpu: 250m
+    memory: 1000Mi
+  limits:
+    cpu: 500m
+    memory: 1000Mi
+
 # --- Deployment-job pod (spawned per OpenTofu run) ---------------------------
-# Chart top-level `requests`/`limits` govern this pod. The chart comments out `requests` by
-# default; we supply it (cpu+memory) to satisfy Kyverno. env0's documented production
-# recommendation is cpu: 1.5 / memory: 3Gi — raise these if you see throttling or OOMKilled.
+# Chart top-level `requests`/`limits` govern this pod; the chart comments `requests` out by
+# default, so we supply it (cpu+memory) to satisfy Kyverno. env0's documented production
+# recommendation is cpu: 1.5 / memory: 3Gi — raise if you see throttling or OOMKilled.
 requests:
   cpu: 460m
   memory: 1500Mi
@@ -31,18 +44,30 @@ limits:
   cpu: 460m
   memory: 1500Mi
 
+# env0-hosted encrypted state — avoids needing a PersistentVolume / StorageClass.
+# Without this, the deployment-job pod requests a PVC bound to StorageClass `env0-state-sc`,
+# which does not exist on dvtl815-poc, so the pod is stuck `FailedScheduling`.
+#
+# SECURITY: real encryption secret; this file is tracked in git. Prefer passing at install time
+# via `--set-string env0StateEncryptionKey=...` and keeping this commented, OR inject from a
+# secrets store.
+# FORMAT (per env0 docs): the value must be BASE64 of a plain-text passphrase — i.e. the key
+# material is "any random string", and you supply it base64-ENCODED. The agent base64-DECODES it
+# back to that string. Generate with:  echo -n "$(openssl rand -hex 24)" | base64
+# Getting this wrong fails `grpc: error while marshaling: string field contains invalid UTF-8`:
+#   - base64 of RANDOM BYTES (openssl rand -base64) decodes to binary -> invalid UTF-8.
+#   - RAW plain text placed here (not base64'd) is itself decoded as base64 -> binary -> invalid.
+# The value below is base64 of a hex passphrase (decodes to valid-UTF-8 ASCII).
+env0StateEncryptionKey: 'YjliMGFiZDE4Zjc2NjMwOGM4NDIzYTUxOGUzOWZiNDk3ZmZiMTIyNzNkZGYyYWQ0'
+
 # The ServiceAccount each deployment-job pod runs as.
 # MUST match the ServiceAccount created by the agent/ Terraform stack AND the
-# --set-string deploymentJobServiceAccountName flag on the helm install command.
-# A mismatch is the most common cause of Unauthorized errors.
+# --set-string deploymentJobServiceAccountName flag. A mismatch causes Unauthorized.
 deploymentJobServiceAccountName: env0-deploy
 
-# Custom agent image — commented out because the stock image is sufficient.
-# Under in-cluster auth (EKS Pod Identity) the agent reaches the Kubernetes API via the
-# in-cluster service-account token; the AWS CLI is NOT needed for cluster access, so the stock
-# ghcr.io/env0/deployment-agent image works. Only build a custom image if a deployment job fails
-# because a specific CLI tool is missing:
+# Custom agent image — commented out; the stock image suffices under in-cluster auth (EKS Pod
+# Identity), where the AWS CLI is not needed for cluster access. Only build a custom image if a
+# deployment job fails for a missing CLI tool:
 #   FROM ghcr.io/env0/deployment-agent:latest
 #   RUN node install-package-cli.js aws
-#
 # dockerImage: <your-registry>/<your-image>:<tag>

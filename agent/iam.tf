@@ -16,9 +16,12 @@
 #     it does not manage its own ENIs.
 #   - CloudWatchLogs: job logs stream to env0, not to a /aws/codebuild log group.
 #   - ArtifactBucket: no CodePipeline artifact hand-off; state lives in the S3 backend below.
-#   - EksAccessEntry (eks:*AccessEntry* / AssociateAccessPolicy): the whole access-entry mechanism is
-#     REPLACED here by a Kubernetes cluster-admin ClusterRoleBinding (rbac.tf), so the role needs no
-#     eks: access-entry writes at all — only DescribeCluster.
+#   - EksAccessEntry (eks:*AccessEntry* / AssociateAccessPolicy): the env0 agent role never WRITES
+#     access entries at runtime, so it needs no eks: access-entry actions — only DescribeCluster.
+#     (There IS an access entry FOR this role — access_entry.tf — granting it cluster RBAC so the
+#     workload's token-auth providers are authorized; but that entry is created by THIS stack using
+#     the operator's admin creds, not by the env0 role itself, so no eks:*AccessEntry* permission is
+#     needed on this policy.)
 
 # --- Trust policy: EKS Pod Identity assumes this role ------------------------
 # NOT the usual EC2/IRSA trust. With EKS Pod Identity the EKS Auth service (principal
