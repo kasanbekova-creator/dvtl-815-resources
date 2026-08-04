@@ -43,6 +43,17 @@ resource "helm_release" "kube_state_metrics" {
   # Minimal values: single replica, small resource requests. In helm provider v3, `set` is
   # a LIST of objects (the v2 repeated `set {}` block form is gone).
   set = [
+    # fullnameOverride renames EVERY object this chart creates — including its cluster-scoped
+    # ClusterRole and ClusterRoleBinding, whose names are NOT namespaced. Without it the chart
+    # names them the global `kube-state-metrics`, which the aws-poc fork's live release already
+    # owns (in ns poc-tfc-replacement) — so the install fails "invalid ownership metadata ...
+    # release-namespace must equal env0-poc-tfc-replacement". The `env0-` namespace prefixes that
+    # isolate this fork elsewhere can't reach cluster-scoped objects, so we prefix the release name
+    # itself here. Same isolation principle, applied to the one layer namespaces don't cover.
+    {
+      name  = "fullnameOverride"
+      value = "env0-kube-state-metrics"
+    },
     {
       name  = "replicas"
       value = "1"
