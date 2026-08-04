@@ -10,16 +10,25 @@ deploy:
   steps:
     terraformInit:
       before:
-        - name: Install AWS CLI v2
+        # TEMPORARY DIAGNOSTIC — prints the runner's OS/libc + available install tools so we can pick
+        # the right AWS CLI install method. The official v2 installer failed with
+        # "cannot execute: required file not found", which points to a musl/Alpine runner (the v2
+        # binary is glibc-only). This step is informational (exits 0) and will be replaced by the
+        # real install once we see the output. The run will still fail later at "aws not found".
+        - name: Probe runner environment
           run: |
-            set -euo pipefail
-            if command -v aws >/dev/null 2>&1; then
-              echo "aws already present: $(aws --version)"; exit 0
-            fi
-            tmp="$(mktemp -d)"
-            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "$tmp/awscliv2.zip"
-            unzip -q "$tmp/awscliv2.zip" -d "$tmp"
-            # Install to a user-writable prefix + a PATH dir; env0 steps may not be root.
-            "$tmp/aws/install" --bin-dir "$HOME/.local/bin" --install-dir "$HOME/.local/aws-cli" --update
-            export PATH="$HOME/.local/bin:$PATH"
-            aws --version
+            echo "===== /etc/os-release ====="
+            cat /etc/os-release 2>&1 || echo "(no /etc/os-release)"
+            echo "===== libc (ldd) ====="
+            ldd --version 2>&1 | head -3 || echo "(ldd not available)"
+            echo "===== whoami / HOME ====="
+            id 2>&1; echo "HOME=$HOME"
+            echo "===== available install tools ====="
+            for t in apk apt-get yum dnf pip pip3 python3 curl unzip aws aws-iam-authenticator; do
+              if command -v "$t" >/dev/null 2>&1; then
+                echo "FOUND  $t -> $(command -v "$t")"
+              else
+                echo "absent $t"
+              fi
+            done
+            echo "===== done (informational) ====="
