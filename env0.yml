@@ -1,0 +1,25 @@
+# env0 custom flow (v2). Installs AWS CLI v2 on the runner BEFORE `tofu init`, because
+# providers.tf authenticates the kubernetes/helm providers to EKS via exec auth
+# (`aws eks get-token`), and the aws_eks_cluster data source + provider config resolve
+# during plan. The env0 runner image does not ship the aws CLI (unlike aws-poc's CodeBuild
+# image), so without this step every k8s/helm apply fails "exec: executable aws not found".
+version: 2
+shell: bash
+
+deploy:
+  steps:
+    terraformInit:
+      before:
+        - name: Install AWS CLI v2
+          run: |
+            set -euo pipefail
+            if command -v aws >/dev/null 2>&1; then
+              echo "aws already present: $(aws --version)"; exit 0
+            fi
+            tmp="$(mktemp -d)"
+            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "$tmp/awscliv2.zip"
+            unzip -q "$tmp/awscliv2.zip" -d "$tmp"
+            # Install to a user-writable prefix + a PATH dir; env0 steps may not be root.
+            "$tmp/aws/install" --bin-dir "$HOME/.local/bin" --install-dir "$HOME/.local/aws-cli" --update
+            export PATH="$HOME/.local/bin:$PATH"
+            aws --version
