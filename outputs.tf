@@ -8,8 +8,8 @@ output "kube_state_metrics_status" {
   value       = helm_release.kube_state_metrics.status
 }
 
-# The pipeline CodeBuild role's EKS access entry moved to pipeline/eks_access.tf; its ARN is now
-# exported by the pipeline/ stack's pipeline_codebuild_access_entry_arn output.
+# The env0 runner's own EKS access entry (granting it cluster access) is managed out-of-band, external
+# to this repo — see the note in main.tf. It is intentionally not an output of this root.
 
 output "app_namespace_name" {
   description = "Name of the namespace the placeholder web app runs in."
@@ -17,12 +17,12 @@ output "app_namespace_name" {
 }
 
 output "app_name" {
-  description = "Name of the app Deployment/Service (used by the post-apply verification in buildspec-apply.yml)."
+  description = "Name of the app Deployment/Service (handy for a post-apply verification / kubectl check)."
   value       = kubernetes_deployment.app.metadata[0].name
 }
 
 output "app_ingress_name" {
-  description = "Name of the app Ingress (used by the post-apply verification in buildspec-apply.yml)."
+  description = "Name of the app Ingress (handy for a post-apply verification / kubectl check)."
   value       = kubernetes_ingress_v1.app.metadata[0].name
 }
 

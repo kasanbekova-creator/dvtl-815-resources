@@ -1,31 +1,28 @@
 variable "eks_cluster_name" {
   description = <<-EOT
     Name of the existing EKS cluster (provisioned by eng/srep/eks-factory) to deploy Kubernetes
-    resources into. For pipeline runs this is injected via TF_VAR_eks_cluster_name from this
-    repo's pipeline/ stack (CodeBuild project); the default below is only for local smoke-tests.
+    resources into. For env0 runs this is injected via TF_VAR_eks_cluster_name; the default below is
+    only for local smoke-tests. NOTE: this cluster is SHARED with the aws-poc fork — the `env0-`
+    namespace prefixes below are what keep this fork's workloads from colliding with aws-poc's.
   EOT
   type        = string
   default     = "dvtl815-poc"
 }
 
 variable "namespace" {
-  description = "Namespace created for the PoC and used by the kube-state-metrics release."
+  description = "Namespace created for the PoC and used by the kube-state-metrics release. Prefixed `env0-` to stay distinct from the aws-poc fork on the shared cluster."
   type        = string
-  default     = "poc-tfc-replacement"
+  default     = "env0-poc-tfc-replacement"
 }
-
-# NOTE: var.codebuild_role_arn was removed here. The EKS access entry that consumed it moved to
-# pipeline/eks_access.tf, which references the role locally (aws_iam_role.codebuild.arn) — so the
-# workload no longer needs the ARN passed in via TF_VAR_codebuild_role_arn. See MIGRATION.md.
 
 # --- Placeholder web app (app.tf) -------------------------------------------
 # This workload CONSUMES the pre-existing AWS Load Balancer Controller, so there are no LBC
 # chart/region/vpcId variables. Service and Ingress names are derived from app_name (one knob).
 
 variable "app_namespace" {
-  description = "Namespace for the placeholder web app."
+  description = "Namespace for the placeholder web app. Prefixed `env0-` to stay distinct from the aws-poc fork on the shared cluster."
   type        = string
-  default     = "dvtl815-app"
+  default     = "env0-dvtl815-app"
 }
 
 variable "app_name" {
@@ -42,11 +39,11 @@ variable "app_image" {
 
 variable "app_image_tag" {
   # The image tag is the app's git commit SHA, written into image_tag.auto.tfvars by the
-  # dvtl-815-app build pipeline (commit-back hand-off) and picked up on the next plan/apply. This
-  # is what RESOLVES review Finding 4: the tag is immutable (ECR repo is IMMUTABLE) and unique per
-  # commit, so `tofu plan` shows a real app_image_tag diff and the manual approval promotes one
-  # specific, traceable image into the cluster. The default below is only a bootstrap for a bare
-  # local plan before the first pipeline build; auto.tfvars overrides it in the pipeline.
+  # dvtl-815-app build pipeline (commit-back hand-off) and picked up on the next plan/apply. The tag
+  # is immutable (ECR repo is IMMUTABLE) and unique per commit, so `tofu plan` shows a real
+  # app_image_tag diff and the manual approval promotes one specific, traceable image into the
+  # cluster. The default below is only a bootstrap for a bare local plan before the first pipeline
+  # build; auto.tfvars overrides it.
   description = "Immutable git-SHA tag of the app image to deploy. Set by dvtl-815-app via image_tag.auto.tfvars."
   type        = string
   default     = "bootstrap"
@@ -83,5 +80,5 @@ variable "app_hostname" {
     the Ingress). Convention: <app>.<account-id>.natera.io. Resolves in-VPC and over VPN (TGW).
   EOT
   type        = string
-  default     = "dvtl815.355433853014.natera.io"
+  default     = "env0-dvtl815.355433853014.natera.io"
 }

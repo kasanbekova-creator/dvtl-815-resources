@@ -1,17 +1,12 @@
-# Dummy Kubernetes-layer resources for the DVTL-815 PoC. These exist only to make the
-# kubernetes and helm providers do real work during plan/apply. Both are throwaways.
+# Dummy Kubernetes-layer resources for the DVTL-815 github-poc PoC. These exist only to make the
+# kubernetes and helm providers do real work during an env0 plan/apply. Both are throwaways.
+#
+# NOTE: the one-time `import {}` blocks the old github-poc carried here (adopting a pre-existing
+# namespace + kube-state-metrics release from an earlier partial apply) are GONE on purpose. Phase 1
+# of the rebuild destroyed those objects, so this is a clean-slate create — there is nothing to
+# import.
 
 # (1) Throwaway namespace -----------------------------------------------------
-# One-time reconciliation (same situation as the helm_release import below): the namespace
-# already exists on the cluster from an earlier partial apply but is missing from state, so a
-# plain apply fails "namespaces ... already exists". This adopts it into state. The
-# kubernetes_namespace import ID is just the namespace name (no slash — namespaces are
-# cluster-scoped). No-op once imported; safe to leave in place.
-import {
-  to = kubernetes_namespace.poc
-  id = "poc-tfc-replacement"
-}
-
 resource "kubernetes_namespace" "poc" {
   metadata {
     name = var.namespace
@@ -34,18 +29,6 @@ resource "kubernetes_namespace" "poc" {
 }
 
 # (2) kube-state-metrics via Helm --------------------------------------------
-# One-time reconciliation: a kube-state-metrics release already exists in the cluster (created
-# by an earlier partial apply) but is missing from state, so a plain apply fails "cannot re-use
-# a name that is still in use". This block adopts the existing release into state during the
-# next plan/apply — it only records the release, it does not modify or recreate it on the
-# cluster. The plan stage bakes the import into tfplan; the apply stage executes that saved
-# plan. No-op once imported, so it is safe to leave in place. The helm provider import ID is
-# "<namespace>/<release-name>".
-import {
-  to = helm_release.kube_state_metrics
-  id = "poc-tfc-replacement/kube-state-metrics"
-}
-
 resource "helm_release" "kube_state_metrics" {
   name       = "kube-state-metrics"
   repository = "https://prometheus-community.github.io/helm-charts"
@@ -83,10 +66,9 @@ resource "helm_release" "kube_state_metrics" {
   ]
 }
 
-# NOTE: the EKS access entry that grants this repo's CodeBuild role cluster access used to live here
-# (old section 3). It moved to pipeline/eks_access.tf to break a bootstrap deadlock: the
-# kubernetes/helm providers below must authenticate to the cluster to refresh state during `plan`,
-# but the access entry granting that authentication was created by the same plan — so `plan` failed
-# `Unauthorized` before it could create the entry. The entry is an AWS control-plane resource that
-# never needed the kube/helm providers, so it now lives in the AWS-only pipeline/ stack (applied
-# first). See MIGRATION.md.
+# NOTE (DVTL-815): the EKS access entry that grants the deploy identity cluster access does NOT live
+# here — on purpose. The kubernetes/helm providers must authenticate to the cluster to refresh state
+# during `plan`; if the access entry granting that authentication were created by this same root, the
+# first `plan` would fail `Unauthorized` (a bootstrap deadlock). For github-poc the env0 runner's own
+# cluster access is granted out-of-band by the env0 IAM role's EKS access entry (external to this
+# repo), so this workload root needs no access-entry resource.

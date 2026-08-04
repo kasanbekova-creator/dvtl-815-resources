@@ -6,11 +6,11 @@
 # Ingress via alb.ingress.kubernetes.io/certificate-arn (see app.tf) instead of relying on
 # auto-discovery — the binding is a hard resource reference, so the 443 listener is deterministic.
 #
-# The cert lives in THIS workload root (not pipeline/) on purpose: the Ingress consumes the ARN by
-# direct resource reference (aws_acm_certificate_validation.app.certificate_arn), so there is no
-# cross-state plumbing (no remote-state read, no TF_VAR passing). The identity that applies this
-# root is the resources CodeBuild role, whose IAM is defined in pipeline/iam.tf — that is where the
-# new ACM + Route53 permissions are added (the role is defined there), NOT a separate principal.
+# The cert lives in THIS workload root on purpose: the Ingress consumes the ARN by direct resource
+# reference (aws_acm_certificate_validation.app.certificate_arn), so there is no cross-state plumbing
+# (no remote-state read, no TF_VAR passing). The identity that applies this root is the env0 deploy
+# runner; its IAM policy (external to this repo — administered in env0/IAM) must grant the ACM +
+# Route53 permissions this file needs on top of the EKS/kubernetes access.
 #
 # Region note: an ACM cert for an ALB must be in the ALB's region (us-west-2). The default aws
 # provider (providers.tf) is us-west-2 — correct. (us-east-1 would only be for CloudFront.)
@@ -80,8 +80,8 @@ resource "aws_route53_record" "app_cert_validation" {
 # precisely to get that ordering.
 #
 # timeouts.create = 10m: a wildcard on a self-owned public zone (60s TTL) validates in minutes. The
-# provider default is 75m, which would outlast CodeBuild's default 60m build timeout and get the
-# whole build killed on a stuck validation; 10m fails fast with a clear error instead.
+# provider default is 75m, which would let a stuck validation hang the env0 deploy far longer than
+# it should; 10m fails fast with a clear error instead.
 resource "aws_acm_certificate_validation" "app" {
   certificate_arn         = aws_acm_certificate.app.arn
   validation_record_fqdns = [for r in aws_route53_record.app_cert_validation : r.fqdn]

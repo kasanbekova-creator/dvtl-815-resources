@@ -8,7 +8,7 @@ data "aws_eks_cluster" "target" {
 }
 
 # Both providers authenticate via exec auth (`aws eks get-token`) — the aws CLI must be
-# on PATH (it is, in the CodeBuild image and locally).
+# on PATH (it is, in the env0 runner image and locally).
 #
 # NOTE THE INTENTIONAL ASYMMETRY between the two blocks below:
 #   - kubernetes provider v3: `exec { ... }` is a nested BLOCK (no `=`).
