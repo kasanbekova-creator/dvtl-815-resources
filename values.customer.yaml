@@ -1,0 +1,48 @@
+# env0 self-hosted agent Helm values — dvtl-815-resources cluster: dvtl815-poc / us-west-2
+# Chart: env0/env0-agent v5.3.0
+#
+# The dvtl815-poc cluster enforces a Kyverno policy (require-requests-limits) that BLOCKS any
+# container without BOTH cpu+memory requests AND cpu+memory limits. The chart's DEFAULT values
+# leave two gaps that trip this policy, so we fill both here:
+#   1. agentProxy.requests is missing `cpu` by default  -> the proxy Deployment is rejected.
+#   2. the deployment-job pod's top-level `requests` is commented out by default -> the job pod
+#      would be rejected next.
+# Both blocks below therefore specify cpu AND memory under BOTH requests and limits.
+
+# --- Proxy pod (the always-on agent proxy Deployment) ------------------------
+# Its own nested block in the chart. Defaults set limits (cpu 500m / mem 1000Mi) and a requests
+# block that OMITS cpu — we add cpu so the pair is complete for Kyverno.
+agentProxy:
+  requests:
+    cpu: 250m
+    memory: 1000Mi
+  limits:
+    cpu: 500m
+    memory: 1000Mi
+
+# --- Deployment-job pod (spawned per OpenTofu run) ---------------------------
+# Chart top-level `requests`/`limits` govern this pod. The chart comments out `requests` by
+# default; we supply it (cpu+memory) to satisfy Kyverno. env0's documented production
+# recommendation is cpu: 1.5 / memory: 3Gi — raise these if you see throttling or OOMKilled.
+requests:
+  cpu: 460m
+  memory: 1500Mi
+limits:
+  cpu: 460m
+  memory: 1500Mi
+
+# The ServiceAccount each deployment-job pod runs as.
+# MUST match the ServiceAccount created by the agent/ Terraform stack AND the
+# --set-string deploymentJobServiceAccountName flag on the helm install command.
+# A mismatch is the most common cause of Unauthorized errors.
+deploymentJobServiceAccountName: env0-deploy
+
+# Custom agent image — commented out because the stock image is sufficient.
+# Under in-cluster auth (EKS Pod Identity) the agent reaches the Kubernetes API via the
+# in-cluster service-account token; the AWS CLI is NOT needed for cluster access, so the stock
+# ghcr.io/env0/deployment-agent image works. Only build a custom image if a deployment job fails
+# because a specific CLI tool is missing:
+#   FROM ghcr.io/env0/deployment-agent:latest
+#   RUN node install-package-cli.js aws
+#
+# dockerImage: <your-registry>/<your-image>:<tag>
