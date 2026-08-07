@@ -32,9 +32,9 @@ variable "app_name" {
 }
 
 variable "app_image" {
-  description = "Container image WITHOUT tag. The dvtl-815-app build pipeline owns this ECR repo and pushes SHA-tagged images to it; app_image_tag selects which one."
+  description = "Container image WITHOUT tag. The dvtl-815-app repo's GitHub Actions build owns this ECR repo (env0-dvtl815-app — distinct from the aws-poc fork's dvtl815-app) and pushes SHA-tagged images to it; app_image_tag selects which one."
   type        = string
-  default     = "355433853014.dkr.ecr.us-west-2.amazonaws.com/dvtl815-app"
+  default     = "355433853014.dkr.ecr.us-west-2.amazonaws.com/env0-dvtl815-app"
 }
 
 variable "app_image_tag" {
